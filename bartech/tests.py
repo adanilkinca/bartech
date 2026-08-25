@@ -1,4 +1,6 @@
 from decimal import Decimal
+from io import StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
@@ -20,6 +22,7 @@ from catalog.models import (
     PublicationStatus,
     RecipeLineRole,
 )
+from catalog.management.commands.sync_cloudinary_assets import normalize
 
 
 class CatalogDomainTests(TestCase):
@@ -216,3 +219,48 @@ class EnvironmentConfigurationTests(TestCase):
     def test_partial_cloudinary_configuration_is_rejected(self):
         with self.assertRaises(RuntimeError):
             cloudinary_config_from_env({'CLOUDINARY_CLOUD_NAME': 'example'})
+
+
+class CloudinaryAssetSyncTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.category = IngredientCategory.objects.create(name='Herbs', slug='herbs')
+        cls.ingredient = Ingredient.objects.create(name='Mint', slug='mint', category=cls.category)
+        cls.cocktail = Cocktail.objects.create(name='Mint Fizz', slug='mint-fizz', status=PublicationStatus.PUBLISHED)
+
+    def test_normalization_handles_public_id_suffixes(self):
+        self.assertEqual(normalize('Mint Master.jpg'), 'mint')
+        self.assertEqual(normalize('mint_master'), 'mint')
+
+    @patch('catalog.management.commands.sync_cloudinary_assets.cloudinary.api.resources')
+    def test_dry_run_matches_without_writing_and_excludes_reserved_fallback(self, resources):
+        resources.return_value = {
+            'resources': [
+                {'public_id': 'mint-master', 'asset_folder': 'ingredients', 'format': 'jpg'},
+                {'public_id': 'mint-fizz-master', 'asset_folder': 'cocktails', 'format': 'jpg'},
+                {'public_id': 'no-photo-master', 'asset_folder': 'common', 'format': 'jpg'},
+            ],
+        }
+        output = StringIO()
+        call_command('sync_cloudinary_assets', stdout=output)
+        self.ingredient.refresh_from_db()
+        self.cocktail.refresh_from_db()
+        self.assertFalse(self.ingredient.primary_image)
+        self.assertFalse(self.cocktail.primary_image)
+        self.assertIn('Matched ingredients: 1', output.getvalue())
+        self.assertIn('Matched cocktails: 1', output.getvalue())
+        self.assertNotIn('no-photo-master', output.getvalue().split('Unmatched Cloudinary assets:', 1)[-1])
+
+    @patch('catalog.management.commands.sync_cloudinary_assets.cloudinary.api.resources')
+    def test_apply_writes_only_empty_fields(self, resources):
+        resources.return_value = {
+            'resources': [
+                {'public_id': 'mint-master', 'asset_folder': 'ingredients'},
+                {'public_id': 'mint-fizz-master', 'asset_folder': 'cocktails'},
+            ],
+        }
+        call_command('sync_cloudinary_assets', apply=True)
+        self.ingredient.refresh_from_db()
+        self.cocktail.refresh_from_db()
+        self.assertEqual(self.ingredient.primary_image.name, 'mint-master')
+        self.assertEqual(self.cocktail.primary_image.name, 'mint-fizz-master')

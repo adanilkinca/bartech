@@ -3,7 +3,7 @@
 {% block content %}
 <article class="detail-page shell">
     <div class="detail-hero">
-        <div class="detail-media">{% if cocktail.primary_image %}<img src="{{ cocktail.primary_image.url }}" alt="{{ cocktail.name }}">{% else %}{% include 'catalog/partials/image_placeholder.html' with label='Cocktail' %}{% endif %}</div>
+        <div class="detail-media">{% if cocktail.primary_image_url %}<img src="{{ cocktail.primary_image_url }}" alt="{{ cocktail.name }}">{% else %}{% include 'catalog/partials/image_placeholder.html' with label='Cocktail' %}{% endif %}</div>
         <div class="detail-heading"><div class="eyebrow">Recipe {{ cocktail.curated_order|stringformat:'02d' }}</div><h1>{{ cocktail.name }}</h1>{% if cocktail.short_description %}<p class="lede">{{ cocktail.short_description }}</p>{% endif %}<div class="tag-row">{% for tag in cocktail.tags.all %}<a class="tag" href="{% url 'catalog:cocktail-list' %}?tag={{ tag.slug }}">{{ tag.name }}</a>{% endfor %}</div></div>
     </div>
     <div class="detail-grid">

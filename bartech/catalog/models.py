@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
+
+from .image_helpers import display_image_url
 from .querysets import CocktailQuerySet, IngredientQuerySet
 
 
@@ -116,6 +118,10 @@ class Ingredient(TimeStampedModel):
     def __str__(self):
         return self.name
 
+    @property
+    def primary_image_url(self):
+        return display_image_url(self.primary_image)
+
 
 class Cocktail(TimeStampedModel):
     objects = CocktailQuerySet.as_manager()
@@ -145,6 +151,10 @@ class Cocktail(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def primary_image_url(self):
+        return display_image_url(self.primary_image)
 
 
 class CocktailIngredient(models.Model):
