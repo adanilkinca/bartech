@@ -4,6 +4,7 @@ from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from bartech.settings import cloudinary_config_from_env, database_config_from_env
 
 from catalog.models import (
     Cocktail,
@@ -172,3 +173,45 @@ class CatalogPublicViewTests(TestCase):
         self.assertContains(response, 'Mint')
         self.assertContains(response, 'to taste')
         self.assertNotContains(response, 'None')
+
+
+class EnvironmentConfigurationTests(TestCase):
+    def test_database_defaults_to_sqlite_without_tidb(self):
+        config = database_config_from_env({})
+        self.assertEqual(config['ENGINE'], 'django.db.backends.sqlite3')
+
+    def test_tidb_configuration_requires_tls_ca_and_builds_mysql_options(self):
+        environment = {
+            'USE_TIDB': 'true',
+            'TIDB_HOST': 'db.example.test',
+            'TIDB_DATABASE': 'bartech',
+            'TIDB_USER': 'bartech-user',
+            'TIDB_PASSWORD': 'not-a-real-secret',
+            'TIDB_SSL_CA': 'C:/certs/ca.pem',
+        }
+        config = database_config_from_env(environment)
+        self.assertEqual(config['ENGINE'], 'django.db.backends.mysql')
+        self.assertEqual(config['OPTIONS']['ssl']['ca'], 'C:/certs/ca.pem')
+
+    def test_tidb_without_ca_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            database_config_from_env({
+                'USE_TIDB': 'true', 'TIDB_HOST': 'host', 'TIDB_DATABASE': 'db',
+                'TIDB_USER': 'user', 'TIDB_PASSWORD': 'password',
+            })
+
+    def test_cloudinary_falls_back_when_credentials_are_absent(self):
+        self.assertIsNone(cloudinary_config_from_env({}))
+
+    def test_cloudinary_configuration_is_secure_and_complete(self):
+        config = cloudinary_config_from_env({
+            'CLOUDINARY_CLOUD_NAME': 'example',
+            'CLOUDINARY_API_KEY': '123',
+            'CLOUDINARY_API_SECRET': 'not-a-real-secret',
+        })
+        self.assertTrue(config['SECURE'])
+        self.assertEqual(config['CLOUD_NAME'], 'example')
+
+    def test_partial_cloudinary_configuration_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            cloudinary_config_from_env({'CLOUDINARY_CLOUD_NAME': 'example'})

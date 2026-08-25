@@ -10,7 +10,70 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+
+def env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}
+
+
+def database_config_from_env(env=None):
+    env = os.environ if env is None else env
+    use_tidb = env.get('USE_TIDB', '').strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}
+    if not use_tidb:
+        return {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+
+    required = ('TIDB_HOST', 'TIDB_DATABASE', 'TIDB_USER', 'TIDB_PASSWORD', 'TIDB_SSL_CA')
+    missing = [name for name in required if not env.get(name)]
+    if missing:
+        raise RuntimeError(f'USE_TIDB is enabled but missing: {", ".join(missing)}')
+
+    return {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': env['TIDB_DATABASE'],
+        'USER': env['TIDB_USER'],
+        'PASSWORD': env['TIDB_PASSWORD'],
+        'HOST': env['TIDB_HOST'],
+        'PORT': env.get('TIDB_PORT', '4000'),
+        'OPTIONS': {
+            'ssl': {'ca': env['TIDB_SSL_CA']},
+            'connect_timeout': int(env.get('TIDB_CONNECT_TIMEOUT', '10')),
+        },
+    }
+
+
+def cloudinary_config_from_env(env=None):
+    env = os.environ if env is None else env
+    names = ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')
+    configured = [bool(env.get(name)) for name in names]
+    if not any(configured):
+        return None
+    if not all(configured):
+        raise RuntimeError('Cloudinary requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET')
+    return {
+        'CLOUD_NAME': env['CLOUDINARY_CLOUD_NAME'],
+        'API_KEY': env['CLOUDINARY_API_KEY'],
+        'API_SECRET': env['CLOUDINARY_API_SECRET'],
+        'SECURE': True,
+    }
+
+
+if os.getenv('USE_TIDB', '').strip().lower() in {'1', 'true', 't', 'yes', 'y', 'on'}:
+    import pymysql
+
+    pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,13 +82,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(-=l+b51-r!4wh1@4d+uzn75n8dt5mne_qfmz6jtmb&5tqqlf-'
+# Development defaults are intentionally safe; production values belong in .env.
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-local-development-only')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DEBUG', True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '').split(',') if host.strip()]
 
 
 # Application definition
@@ -42,6 +105,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -51,6 +115,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'bartech.urls'
+TEST_RUNNER = 'bartech.test_runner.BarTechTestRunner'
 
 TEMPLATES = [
     {
@@ -73,12 +138,7 @@ WSGI_APPLICATION = 'bartech.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+DATABASES = {'default': database_config_from_env()}
 
 
 # Password validation
@@ -115,7 +175,27 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+if cloudinary_settings := cloudinary_config_from_env():
+    CLOUDINARY_STORAGE = cloudinary_settings
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+else:
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+STORAGES = {
+    'default': {'BACKEND': DEFAULT_FILE_STORAGE},
+    'staticfiles': {
+        'BACKEND': (
+            'whitenoise.storage.CompressedStaticFilesStorage'
+            if DEBUG else
+            'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
+    },
+}
 
 
 # Email
