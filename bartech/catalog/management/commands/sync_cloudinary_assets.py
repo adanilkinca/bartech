@@ -15,6 +15,12 @@ def normalize(value):
     return re.sub(r'[^a-z0-9]+', '', value)
 
 
+def normalize_raw(value):
+    value = (value or '').lower().strip()
+    value = re.sub(r'\.[a-z0-9]{2,5}$', '', value)
+    return re.sub(r'[^a-z0-9]+', '', value)
+
+
 class Command(BaseCommand):
     help = 'Report or safely assign matching Cloudinary image assets.'
 
@@ -29,14 +35,10 @@ class Command(BaseCommand):
         assets = self.discover_assets()
         self.stdout.write(f'Discovered assets: {len(assets)}')
         self.report_group_counts(assets)
-        matches, unmatched_ingredients, unmatched_cocktails = self.match_records(assets)
-        self.report_matches(matches, options['force'])
+        report, matches, unmatched_ingredients, unmatched_cocktails = self.build_report(assets)
+        self.report_mapping(report)
         self.report_unmatched_records(unmatched_ingredients, unmatched_cocktails)
-        matched_ids = {match['asset']['public_id'] for match in matches}
-        unmatched_assets = [asset for asset in assets if asset['public_id'] not in matched_ids and asset['public_id'] != FALLBACK_PUBLIC_ID]
-        self.stdout.write(f'Unmatched Cloudinary assets: {len(unmatched_assets)}')
-        for asset in unmatched_assets:
-            self.stdout.write(f"- {asset['public_id']}")
+        self.stdout.write(f'Unmatched Cloudinary assets: {sum(row["confidence"] == "unmatched" for row in report)}')
         if options['apply']:
             self.apply_matches(matches, options['force'])
             self.stdout.write(self.style.SUCCESS('Applied confident matches.'))
@@ -75,35 +77,82 @@ class Command(BaseCommand):
             groups[folder if folder in {'cocktails', 'ingredients', 'common'} else 'other'] += 1
         self.stdout.write('Asset groups: ' + ', '.join(f'{key}={groups[key]}' for key in ('cocktails', 'ingredients', 'common', 'other')))
 
-    def match_records(self, assets):
+    def build_report(self, assets):
+        report = []
         matches = []
-        matched_ids = set()
-        for model, group in ((Ingredient, 'ingredients'), (Cocktail, 'cocktails')):
-            for record in model.objects.all():
-                candidates = []
-                record_names = {normalize(record.name), normalize(record.slug)}
-                for asset in assets:
-                    if asset['public_id'] == FALLBACK_PUBLIC_ID or asset['public_id'] in matched_ids:
-                        continue
-                    if asset['folder'].split('/', 1)[0].lower() != group:
-                        continue
-                    if record_names & {normalize(asset['public_id']), normalize(asset['display_name'])}:
-                        candidates.append(asset)
-                if len(candidates) == 1:
-                    matches.append({'model': model, 'record': record, 'asset': candidates[0]})
-                    matched_ids.add(candidates[0]['public_id'])
-        matched_records = {(match['model'], match['record'].pk) for match in matches}
+        matched_records = set()
+        for asset in assets:
+            group = asset['folder'].split('/', 1)[0].lower()
+            if group not in {'ingredients', 'cocktails'}:
+                continue
+            model = Ingredient if group == 'ingredients' else Cocktail
+            candidates = self.candidates_for_asset(asset, model)
+            row = self.mapping_row(asset, candidates)
+            report.append(row)
+            if row['confidence'] in {'exact', 'high'} and len(candidates) == 1:
+                candidate = candidates[0]
+                record_key = (model, candidate['record'].pk)
+                if record_key not in matched_records:
+                    matches.append({'model': model, 'record': candidate['record'], 'asset': asset})
+                    matched_records.add(record_key)
         unmatched_ingredients = [record for record in Ingredient.objects.all() if (Ingredient, record.pk) not in matched_records]
         unmatched_cocktails = [record for record in Cocktail.objects.all() if (Cocktail, record.pk) not in matched_records]
-        return matches, unmatched_ingredients, unmatched_cocktails
+        return report, matches, unmatched_ingredients, unmatched_cocktails
 
-    def report_matches(self, matches, force):
-        for model, label in ((Ingredient, 'ingredients'), (Cocktail, 'cocktails')):
-            model_matches = [match for match in matches if match['model'] is model]
-            self.stdout.write(f'Matched {label}: {len(model_matches)}')
-            for match in model_matches:
-                action = 'assign' if force or not match['record'].primary_image else 'skip existing'
-                self.stdout.write(f"- {match['record'].name} -> {match['asset']['public_id']} ({action})")
+    def candidates_for_asset(self, asset, model):
+        asset_values = (asset['public_id'], asset['display_name'])
+        candidates = []
+        for record in model.objects.all():
+            record_values = (record.name, record.slug)
+            raw_match = any(normalize_raw(asset_value) == normalize_raw(record_value) for asset_value in asset_values for record_value in record_values)
+            normalized_match = any(normalize(asset_value) == normalize(record_value) for asset_value in asset_values for record_value in record_values)
+            possible_match = any(
+                normalize(asset_value) in normalize(record_value) or normalize(record_value) in normalize(asset_value)
+                for asset_value in asset_values for record_value in record_values
+                if normalize(asset_value) and normalize(record_value)
+            )
+            if raw_match:
+                score, confidence, reason = 3, 'exact', 'public/display name exactly matches DB name or slug'
+            elif normalized_match:
+                score, confidence, reason = 2, 'high', 'normalized name matches after separators or master suffix removal'
+            elif possible_match:
+                score, confidence, reason = 1, 'possible', 'one normalized value contains the other; review before assigning'
+            else:
+                continue
+            candidates.append({'record': record, 'score': score, 'confidence': confidence, 'reason': reason})
+        return sorted(candidates, key=lambda candidate: (-candidate['score'], candidate['record'].name))
+
+    @staticmethod
+    def mapping_row(asset, candidates):
+        if not candidates:
+            return {'asset': asset, 'candidate': 'none', 'confidence': 'unmatched', 'reason': 'no exact or conservative normalized DB candidate'}
+        best_score = candidates[0]['score']
+        best = [candidate for candidate in candidates if candidate['score'] == best_score]
+        if len(best) > 1:
+            return {
+                'asset': asset,
+                'candidate': 'ambiguous: ' + ', '.join(candidate['record'].name for candidate in best),
+                'confidence': 'possible',
+                'reason': 'multiple DB records share the best normalized match',
+            }
+        candidate = best[0]
+        return {
+            'asset': asset,
+            'candidate': candidate['record'].name,
+            'confidence': candidate['confidence'],
+            'reason': candidate['reason'],
+        }
+
+    def report_mapping(self, report):
+        for group in ('cocktails', 'ingredients'):
+            self.stdout.write(f'{group.title()} mapping report')
+            for row in report:
+                if row['asset']['folder'].split('/', 1)[0].lower() == group:
+                    asset = row['asset']
+                    self.stdout.write(
+                        f"{asset['public_id']} | {asset['display_name']} | {row['candidate']} | "
+                        f"{row['confidence']} | {row['reason']}"
+                    )
 
     def report_unmatched_records(self, ingredients, cocktails):
         self.stdout.write(f'Unmatched DB ingredients: {len(ingredients)}')

@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
 
 class CocktailQuerySet(models.QuerySet):
     def published(self):
@@ -20,8 +21,13 @@ class CocktailQuerySet(models.QuerySet):
     def search(self, query):
         if not query:
             return self
-        return self.filter(
-            Q(name__icontains=query) | Q(recipe_ingredients__ingredient__name__icontains=query),
+        query = query.lower()
+        queryset = self.annotate(
+            _search_cocktail_name=Lower('name'),
+            _search_ingredient_name=Lower('recipe_ingredients__ingredient__name'),
+        )
+        return queryset.filter(
+            Q(_search_cocktail_name__contains=query) | Q(_search_ingredient_name__contains=query),
         ).distinct()
 
     def filter_by_tag(self, slug):
@@ -39,7 +45,9 @@ class IngredientQuerySet(models.QuerySet):
         return self.filter(is_active=True)
 
     def search(self, query):
-        return self.filter(name__icontains=query) if query else self
+        if not query:
+            return self
+        return self.annotate(_search_name=Lower('name')).filter(_search_name__contains=query.lower())
 
     def filter_by_category(self, slug):
         return self.filter(category__slug=slug) if slug else self

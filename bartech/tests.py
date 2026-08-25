@@ -168,7 +168,9 @@ class CatalogPublicViewTests(TestCase):
         CocktailIngredient.objects.create(cocktail=self.draft, ingredient=self.ingredient, unit=None, sort_order=1)
         response = self.client.get(reverse('catalog:ingredient-detail', args=[self.ingredient.slug]))
         content = response.content.decode()
-        self.assertEqual(content.count('Garden Sour'), 1)
+        cocktail_names = [cocktail.name for cocktail in response.context['cocktails']]
+        self.assertEqual(cocktail_names.count(self.cocktail.name), 1)
+        self.assertEqual(len(cocktail_names), len(set(cocktail_names)))
         self.assertNotIn('Hidden Draft', content)
 
     def test_nullable_unit_renders_without_none(self):
@@ -247,8 +249,8 @@ class CloudinaryAssetSyncTests(TestCase):
         self.cocktail.refresh_from_db()
         self.assertFalse(self.ingredient.primary_image)
         self.assertFalse(self.cocktail.primary_image)
-        self.assertIn('Matched ingredients: 1', output.getvalue())
-        self.assertIn('Matched cocktails: 1', output.getvalue())
+        self.assertIn('mint-master | mint-master | Mint | high |', output.getvalue())
+        self.assertIn('mint-fizz-master | mint-fizz-master | Mint Fizz | high |', output.getvalue())
         self.assertNotIn('no-photo-master', output.getvalue().split('Unmatched Cloudinary assets:', 1)[-1])
 
     @patch('catalog.management.commands.sync_cloudinary_assets.cloudinary.api.resources')
