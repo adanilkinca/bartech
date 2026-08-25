@@ -115,7 +115,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'bartech.urls'
-TEST_RUNNER = 'bartech.test_runner.BarTechTestRunner'
 
 TEMPLATES = [
     {
