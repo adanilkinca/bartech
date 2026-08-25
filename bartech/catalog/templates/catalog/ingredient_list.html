@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Ingredients | BarTech{% endblock %}
+{% block content %}
+<section class="page-intro shell">
+    <div><div class="eyebrow">The pantry index</div><h1>Ingredients</h1><p class="lede">Know the building blocks. Then find the drinks that make them sing.</p></div>
+    <div class="result-count">{{ page_obj.paginator.count }} ingredients</div>
+</section>
+<section class="shell catalog-layout">
+    <aside class="filter-panel">
+        <form method="get">
+            <label for="ingredient-search">Search ingredients</label><input id="ingredient-search" name="q" value="{{ query }}" placeholder="Try citrus or mint">
+            <label for="ingredient-category">Category</label><select id="ingredient-category" name="category"><option value="">All categories</option>{% for category in categories %}<option value="{{ category.slug }}"{% if selected_category == category.slug %} selected{% endif %}>{{ category.name }}</option>{% endfor %}</select>
+            <button class="button" type="submit">Apply filters</button>
+            {% if query or selected_category %}<a class="reset-link" href="{% url 'catalog:ingredient-list' %}">Clear filters</a>{% endif %}
+        </form>
+    </aside>
+    <div class="catalog-content">{% if ingredients %}<div class="card-grid ingredient-grid">{% for ingredient in ingredients %}{% include 'catalog/partials/ingredient_card.html' %}{% endfor %}</div>{% include 'catalog/partials/pagination.html' %}{% else %}<div class="empty-state"><h2>No ingredients found</h2><p>Try a different search or clear the filter.</p></div>{% endif %}</div>
+</section>
+{% endblock %}

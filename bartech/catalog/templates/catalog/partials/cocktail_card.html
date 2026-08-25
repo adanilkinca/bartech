@@ -1,0 +1,21 @@
+<article class="card cocktail-card">
+    <a class="card-media" href="{% url 'catalog:cocktail-detail' cocktail.slug %}">
+        {% if cocktail.primary_image %}
+            <img src="{{ cocktail.primary_image.url }}" alt="{{ cocktail.name }}">
+        {% else %}
+            {% include 'catalog/partials/image_placeholder.html' with label='Cocktail' %}
+        {% endif %}
+    </a>
+    <div class="card-body">
+        <div class="eyebrow">Recipe {{ cocktail.curated_order|stringformat:'02d' }}</div>
+        <h2><a href="{% url 'catalog:cocktail-detail' cocktail.slug %}">{{ cocktail.name }}</a></h2>
+        {% if cocktail.short_description %}<p>{{ cocktail.short_description|truncatewords:18 }}</p>{% endif %}
+        {% if cocktail.primary_glassware %}<div class="card-meta">{{ cocktail.primary_glassware.name }}</div>{% endif %}
+        <div class="tag-row">
+            {% for tag in cocktail.tags.all %}<a class="tag" href="{% url 'catalog:cocktail-list' %}?tag={{ tag.slug }}">{{ tag.name }}</a>{% endfor %}
+        </div>
+        <div class="ingredient-chips">
+            {% for line in cocktail.recipe_ingredients.all|slice:':4' %}<a href="{% url 'catalog:ingredient-detail' line.ingredient.slug %}">{{ line.ingredient.name }}</a>{% endfor %}
+        </div>
+    </div>
+</article>

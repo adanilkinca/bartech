@@ -124,7 +124,7 @@ class Command(BaseCommand):
                 'description': 'A bright, herbaceous sour balanced with simple syrup.',
                 'glass': 'Coupe glass',
                 'tag': 'sour',
-                'lines': [('bourbon', 'ml', '45', 'ingredient'), ('lemon-juice', 'ml', '25', 'ingredient'), ('simple-syrup', 'ml', '15', 'ingredient'), ('mint', 'piece', '1', 'garnish'), ('ice-cubes', 'piece', None, 'ice')],
+                'lines': [('bourbon', 'ml', '45', 'ingredient'), ('lemon-juice', 'ml', '25', 'ingredient'), ('simple-syrup', 'ml', '15', 'ingredient'), ('mint', None, None, 'garnish'), ('ice-cubes', 'piece', None, 'ice')],
                 'steps': ('Shake the bourbon, lemon juice, syrup, and ice.', 'Strain into a chilled coupe and garnish with mint.'),
                 'equipment': ('Shaker', 'Strainer', 'Jigger'),
             },
@@ -155,7 +155,7 @@ class Command(BaseCommand):
                 CocktailIngredient.objects.create(
                     cocktail=cocktail,
                     ingredient=ingredients[ingredient],
-                    unit=units[unit],
+                    unit=units.get(unit),
                     amount=amount,
                     role=role,
                     sort_order=line_order,

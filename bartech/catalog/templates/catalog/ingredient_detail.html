@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}{{ ingredient.name }} | BarTech{% endblock %}
+{% block content %}
+<article class="detail-page shell">
+    <div class="detail-hero ingredient-hero"><div class="detail-media">{% if ingredient.primary_image %}<img src="{{ ingredient.primary_image.url }}" alt="{{ ingredient.name }}">{% else %}{% include 'catalog/partials/image_placeholder.html' with label='Ingredient' %}{% endif %}</div><div class="detail-heading"><div class="eyebrow">{{ ingredient.category.name }}</div><h1>{{ ingredient.name }}</h1>{% if ingredient.description %}<p class="lede">{{ ingredient.description }}</p>{% endif %}</div></div>
+    <section class="related-section"><div class="section-kicker">The reverse index</div><h2>Cocktails with {{ ingredient.name }}</h2>{% if cocktails %}<div class="card-grid">{% for cocktail in cocktails %}{% include 'catalog/partials/cocktail_card.html' %}{% endfor %}</div>{% else %}<div class="empty-state"><h2>No published recipes yet</h2><p>This ingredient is waiting for its first BarTech recipe.</p></div>{% endif %}</section>
+</article>
+{% endblock %}

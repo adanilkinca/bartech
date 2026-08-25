@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}{{ cocktail.name }} | BarTech{% endblock %}
+{% block content %}
+<article class="detail-page shell">
+    <div class="detail-hero">
+        <div class="detail-media">{% if cocktail.primary_image %}<img src="{{ cocktail.primary_image.url }}" alt="{{ cocktail.name }}">{% else %}{% include 'catalog/partials/image_placeholder.html' with label='Cocktail' %}{% endif %}</div>
+        <div class="detail-heading"><div class="eyebrow">Recipe {{ cocktail.curated_order|stringformat:'02d' }}</div><h1>{{ cocktail.name }}</h1>{% if cocktail.short_description %}<p class="lede">{{ cocktail.short_description }}</p>{% endif %}<div class="tag-row">{% for tag in cocktail.tags.all %}<a class="tag" href="{% url 'catalog:cocktail-list' %}?tag={{ tag.slug }}">{{ tag.name }}</a>{% endfor %}</div></div>
+    </div>
+    <div class="detail-grid">
+        <section class="recipe-section"><div class="section-kicker">Build</div><h2>Ingredients</h2><ul class="recipe-list">{% for line in cocktail.recipe_ingredients.all %}<li><div><a href="{% url 'catalog:ingredient-detail' line.ingredient.slug %}">{{ line.ingredient.name }}</a>{% if line.preparation_note %}<small>{{ line.preparation_note }}</small>{% endif %}</div><span class="recipe-measure">{% if line.amount %}{{ line.amount|floatformat:'-3' }}{% endif %}{% if line.unit %} {{ line.unit.code }}{% elif line.role == 'garnish' %} to taste{% elif line.amount %} to taste{% else %} as needed{% endif %}{% if line.role != 'ingredient' %}<small>{{ line.get_role_display }}</small>{% endif %}</span></li>{% empty %}<li>No ingredients added yet.</li>{% endfor %}</ul></section>
+        <aside class="detail-aside"><div class="section-kicker">Serve</div><h2>{% if cocktail.primary_glassware %}{{ cocktail.primary_glassware.name }}{% else %}Glassware to be decided{% endif %}</h2>{% if cocktail.equipment_items.all %}<div class="section-kicker aside-kicker">Tools</div><ul class="simple-list">{% for item in cocktail.equipment_items.all %}<li>{{ item.equipment.name }}{% if item.quantity > 1 %} <span>x{{ item.quantity }}</span>{% endif %}{% if item.note %}<small>{{ item.note }}</small>{% endif %}</li>{% endfor %}</ul>{% endif %}</aside>
+    </div>
+    <section class="steps-section"><div class="section-kicker">Method</div><h2>Preparation</h2><ol class="steps-list">{% for step in cocktail.preparation_steps.all %}<li>{{ step.instruction }}</li>{% empty %}<li>Preparation details coming soon.</li>{% endfor %}</ol></section>
+</article>
+{% endblock %}

@@ -1,0 +1,14 @@
+<article class="card ingredient-card">
+    <a class="card-media" href="{% url 'catalog:ingredient-detail' ingredient.slug %}">
+        {% if ingredient.primary_image %}
+            <img src="{{ ingredient.primary_image.url }}" alt="{{ ingredient.name }}">
+        {% else %}
+            {% include 'catalog/partials/image_placeholder.html' with label='Ingredient' %}
+        {% endif %}
+    </a>
+    <div class="card-body">
+        <div class="eyebrow">{{ ingredient.category.name }}</div>
+        <h2><a href="{% url 'catalog:ingredient-detail' ingredient.slug %}">{{ ingredient.name }}</a></h2>
+        {% if ingredient.description %}<p>{{ ingredient.description|truncatewords:20 }}</p>{% endif %}
+    </div>
+</article>

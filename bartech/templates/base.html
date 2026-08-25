@@ -1,0 +1,31 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}BarTech{% endblock %}</title>
+    <meta name="description" content="A clear, practical guide to cocktails and their ingredients.">
+    <link rel="stylesheet" href="{% static 'catalog/css/site.css' %}">
+</head>
+<body>
+    <header class="site-header">
+        <div class="shell header-inner">
+            <a class="wordmark" href="{% url 'catalog:cocktail-list' %}">Bar<span>Tech</span></a>
+            <nav class="site-nav" aria-label="Main navigation">
+                <a href="{% url 'catalog:cocktail-list' %}" class="{% if request.resolver_match.url_name == 'cocktail-list' or request.resolver_match.url_name == 'cocktail-detail' %}active{% endif %}">Cocktails</a>
+                <a href="{% url 'catalog:ingredient-list' %}" class="{% if request.resolver_match.url_name == 'ingredient-list' or request.resolver_match.url_name == 'ingredient-detail' %}active{% endif %}">Ingredients</a>
+            </nav>
+        </div>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+        <div class="shell footer-inner">
+            <span class="footer-mark">BarTech</span>
+            <span>A practical index for better drinks.</span>
+        </div>
+    </footer>
+</body>
+</html>

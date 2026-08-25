@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Cocktails | BarTech{% endblock %}
+{% block content %}
+<section class="page-intro shell">
+    <div>
+        <div class="eyebrow">The recipe index</div>
+        <h1>Cocktails</h1>
+        <p class="lede">Find a drink by its character, glass, or what is already on your bar.</p>
+    </div>
+    <div class="result-count">{{ page_obj.paginator.count }} recipes</div>
+</section>
+<section class="shell catalog-layout">
+    <aside class="filter-panel">
+        <form method="get">
+            <label for="cocktail-search">Search recipes</label>
+            <input id="cocktail-search" name="q" value="{{ query }}" placeholder="Try bourbon or sour">
+            <label for="cocktail-tag">Tag</label>
+            <select id="cocktail-tag" name="tag"><option value="">All tags</option>{% for tag in tags %}<option value="{{ tag.slug }}"{% if selected_tag == tag.slug %} selected{% endif %}>{{ tag.name }}</option>{% endfor %}</select>
+            <label for="cocktail-ingredient">Ingredient</label>
+            <select id="cocktail-ingredient" name="ingredient"><option value="">Any ingredient</option>{% for ingredient in ingredients %}<option value="{{ ingredient.slug }}"{% if selected_ingredient == ingredient.slug %} selected{% endif %}>{{ ingredient.name }}</option>{% endfor %}</select>
+            <label for="cocktail-glassware">Glassware</label>
+            <select id="cocktail-glassware" name="glassware"><option value="">Any glass</option>{% for glassware in glasswares %}<option value="{{ glassware.slug }}"{% if selected_glassware == glassware.slug %} selected{% endif %}>{{ glassware.name }}</option>{% endfor %}</select>
+            <label for="cocktail-sort">Sort</label>
+            <select id="cocktail-sort" name="sort"><option value="curated"{% if selected_sort != 'alphabetical' %} selected{% endif %}>Curated</option><option value="alphabetical"{% if selected_sort == 'alphabetical' %} selected{% endif %}>Alphabetical</option></select>
+            <button class="button" type="submit">Apply filters</button>
+            {% if query or selected_tag or selected_ingredient or selected_glassware or selected_sort == 'alphabetical' %}<a class="reset-link" href="{% url 'catalog:cocktail-list' %}">Clear filters</a>{% endif %}
+        </form>
+    </aside>
+    <div class="catalog-content">
+        {% if cocktails %}
+            <div class="card-grid">{% for cocktail in cocktails %}{% include 'catalog/partials/cocktail_card.html' %}{% endfor %}</div>
+            {% include 'catalog/partials/pagination.html' %}
+        {% else %}<div class="empty-state"><h2>No recipes found</h2><p>Try a different search or clear the filters.</p></div>{% endif %}
+    </div>
+</section>
+{% endblock %}

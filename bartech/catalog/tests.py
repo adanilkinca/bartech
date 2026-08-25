@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.urls import reverse
 
 from catalog.models import (
     Cocktail,
@@ -55,7 +56,7 @@ class CatalogDomainTests(TestCase):
             amount=Decimal('1.250'), sort_order=1,
         )
         unmeasured = CocktailIngredient.objects.create(
-            cocktail=self.cocktail, ingredient=self.second_ingredient, unit=self.piece,
+            cocktail=self.cocktail, ingredient=self.second_ingredient, unit=None,
             amount=None, role=RecipeLineRole.ICE, sort_order=2,
         )
         self.assertEqual(measured.amount, Decimal('1.250'))
@@ -97,3 +98,77 @@ class CatalogDomainTests(TestCase):
         call_command('seed_catalog')
         self.assertEqual(Cocktail.objects.count(), first_count)
         self.assertEqual(Cocktail.objects.filter(status=PublicationStatus.PUBLISHED).count(), 3)
+
+
+class CatalogPublicViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        call_command('seed_catalog')
+        cls.cocktail = Cocktail.objects.get(slug='garden-sour')
+        cls.draft = Cocktail.objects.create(name='Hidden Draft', slug='hidden-draft')
+        cls.ingredient = Ingredient.objects.get(slug='bourbon')
+        cls.category = cls.ingredient.category
+        cls.tag = cls.cocktail.tags.first()
+        cls.glassware = cls.cocktail.primary_glassware
+
+    def test_cocktail_list_shows_published_and_excludes_drafts(self):
+        response = self.client.get(reverse('catalog:cocktail-list'))
+        self.assertContains(response, 'Garden Sour')
+        self.assertNotContains(response, 'Hidden Draft')
+
+    def test_published_cocktail_detail_works_and_draft_returns_404(self):
+        response = self.client.get(reverse('catalog:cocktail-detail', args=[self.cocktail.slug]))
+        self.assertContains(response, 'Garden Sour')
+        self.assertContains(response, 'Bourbon')
+        self.assertEqual(
+            self.client.get(reverse('catalog:cocktail-detail', args=[self.draft.slug])).status_code,
+            404,
+        )
+
+    def test_ingredient_list_shows_active_ingredients_only(self):
+        inactive = Ingredient.objects.create(name='Hidden Herb', slug='hidden-herb', category=self.category, is_active=False)
+        response = self.client.get(reverse('catalog:ingredient-list'))
+        self.assertContains(response, 'Bourbon')
+        self.assertNotContains(response, inactive.name)
+
+    def test_cocktail_search_finds_ingredient_names(self):
+        response = self.client.get(reverse('catalog:cocktail-list'), {'q': 'mint'})
+        self.assertContains(response, 'Garden Sour')
+
+    def test_cocktail_tag_ingredient_and_glassware_filters(self):
+        url = reverse('catalog:cocktail-list')
+        self.assertContains(self.client.get(url, {'tag': self.tag.slug}), self.cocktail.name)
+        self.assertContains(self.client.get(url, {'ingredient': 'bourbon'}), self.cocktail.name)
+        self.assertContains(self.client.get(url, {'glassware': self.glassware.slug}), self.cocktail.name)
+
+    def test_ingredient_category_filter_and_alphabetical_sort(self):
+        response = self.client.get(reverse('catalog:ingredient-list'), {'category': self.category.slug})
+        self.assertContains(response, 'Bourbon')
+        response = self.client.get(reverse('catalog:cocktail-list'), {'sort': 'alphabetical'})
+        names = [cocktail.name for cocktail in Cocktail.objects.published().order_by('name')]
+        positions = [response.content.decode().find(name) for name in names]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_pagination_preserves_filters(self):
+        for index in range(7):
+            extra = Cocktail.objects.create(
+                name=f'Extra {index}', slug=f'extra-{index}', status=PublicationStatus.PUBLISHED,
+                curated_order=index + 10,
+            )
+            extra.tags.add(self.tag)
+        response = self.client.get(reverse('catalog:cocktail-list'), {'tag': self.tag.slug, 'page': 2})
+        self.assertContains(response, f'tag={self.tag.slug}&page=1')
+
+    def test_ingredient_detail_reverse_list_deduplicates_and_excludes_drafts(self):
+        CocktailIngredient.objects.create(cocktail=self.cocktail, ingredient=self.ingredient, unit=None, sort_order=90)
+        CocktailIngredient.objects.create(cocktail=self.draft, ingredient=self.ingredient, unit=None, sort_order=1)
+        response = self.client.get(reverse('catalog:ingredient-detail', args=[self.ingredient.slug]))
+        content = response.content.decode()
+        self.assertEqual(content.count('Garden Sour'), 1)
+        self.assertNotIn('Hidden Draft', content)
+
+    def test_nullable_unit_renders_without_none(self):
+        response = self.client.get(reverse('catalog:cocktail-detail', args=[self.cocktail.slug]))
+        self.assertContains(response, 'Mint')
+        self.assertContains(response, 'to taste')
+        self.assertNotContains(response, 'None')

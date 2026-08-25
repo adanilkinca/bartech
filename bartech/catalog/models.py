@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.utils.text import slugify
+from .querysets import CocktailQuerySet, IngredientQuerySet
 
 
 class PublicationStatus(models.TextChoices):
@@ -94,6 +94,7 @@ class Equipment(TimeStampedModel):
 
 
 class Ingredient(TimeStampedModel):
+    objects = IngredientQuerySet.as_manager()
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=160, unique=True)
     description = models.TextField(blank=True)
@@ -117,6 +118,7 @@ class Ingredient(TimeStampedModel):
 
 
 class Cocktail(TimeStampedModel):
+    objects = CocktailQuerySet.as_manager()
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=160, unique=True)
     short_description = models.TextField(blank=True)
@@ -166,6 +168,8 @@ class CocktailIngredient(models.Model):
     unit = models.ForeignKey(
         MeasurementUnit,
         on_delete=models.PROTECT,
+        blank=True,
+        null=True,
         related_name='recipe_ingredients',
     )
     sort_order = models.PositiveIntegerField(default=0)
