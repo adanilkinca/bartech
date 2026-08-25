@@ -67,6 +67,8 @@ def cloudinary_config_from_env(env=None):
         'API_KEY': env['CLOUDINARY_API_KEY'],
         'API_SECRET': env['CLOUDINARY_API_SECRET'],
         'SECURE': True,
+        # ImageField names are Cloudinary public IDs, not MEDIA_URL-relative paths.
+        'PREFIX': '',
     }
 
 

@@ -211,6 +211,7 @@ class EnvironmentConfigurationTests(TestCase):
         })
         self.assertTrue(config['SECURE'])
         self.assertEqual(config['CLOUD_NAME'], 'example')
+        self.assertEqual(config['PREFIX'], '')
 
     def test_partial_cloudinary_configuration_is_rejected(self):
         with self.assertRaises(RuntimeError):
