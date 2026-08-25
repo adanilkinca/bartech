@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from bartech.settings import cloudinary_config_from_env, database_config_from_env
+from catalog.storage import VersionedMediaCloudinaryStorage
 
 from catalog.models import (
     Cocktail,
@@ -266,3 +267,30 @@ class CloudinaryAssetSyncTests(TestCase):
         self.cocktail.refresh_from_db()
         self.assertEqual(self.ingredient.primary_image.name, 'mint-master')
         self.assertEqual(self.cocktail.primary_image.name, 'mint-fizz-master')
+
+
+class CloudinaryVersionedStorageTests(TestCase):
+    def setUp(self):
+        VersionedMediaCloudinaryStorage._version_cache.clear()
+
+    @patch('catalog.storage.cloudinary.api.resource')
+    def test_image_url_uses_current_cloudinary_version(self, resource):
+        resource.return_value = {'version': 1787639889}
+        storage = VersionedMediaCloudinaryStorage()
+        url = storage.url('mint-master')
+        self.assertIn('/image/upload/v1787639889/mint-master', url)
+        resource.assert_called_once_with('mint-master', resource_type='image', type='upload')
+
+    @patch('catalog.storage.cloudinary.api.resource', side_effect=RuntimeError('metadata unavailable'))
+    def test_url_falls_back_without_metadata(self, resource):
+        storage = VersionedMediaCloudinaryStorage()
+        url = storage.url('mint-master')
+        self.assertIn('/image/upload/mint-master', url)
+
+    @patch('catalog.storage.cloudinary.api.resource')
+    def test_version_metadata_is_cached_for_ttl(self, resource):
+        resource.return_value = {'version': 123}
+        storage = VersionedMediaCloudinaryStorage()
+        storage.url('mint-master')
+        storage.url('mint-master')
+        resource.assert_called_once()

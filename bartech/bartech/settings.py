@@ -183,7 +183,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 if cloudinary_settings := cloudinary_config_from_env():
     CLOUDINARY_STORAGE = cloudinary_settings
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    CLOUDINARY_VERSION_CACHE_TTL = int(os.getenv('CLOUDINARY_VERSION_CACHE_TTL', '300'))
+    DEFAULT_FILE_STORAGE = 'catalog.storage.VersionedMediaCloudinaryStorage'
 else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
