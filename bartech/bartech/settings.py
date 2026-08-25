@@ -41,7 +41,7 @@ def database_config_from_env(env=None):
         raise RuntimeError(f'USE_TIDB is enabled but missing: {", ".join(missing)}')
 
     return {
-        'ENGINE': 'django.db.backends.mysql',
+        'ENGINE': 'django_tidb',
         'NAME': env['TIDB_DATABASE'],
         'USER': env['TIDB_USER'],
         'PASSWORD': env['TIDB_PASSWORD'],

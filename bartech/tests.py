@@ -190,7 +190,7 @@ class EnvironmentConfigurationTests(TestCase):
             'TIDB_SSL_CA': 'C:/certs/ca.pem',
         }
         config = database_config_from_env(environment)
-        self.assertEqual(config['ENGINE'], 'django.db.backends.mysql')
+        self.assertEqual(config['ENGINE'], 'django_tidb')
         self.assertEqual(config['OPTIONS']['ssl']['ca'], 'C:/certs/ca.pem')
 
     def test_tidb_without_ca_is_rejected(self):
