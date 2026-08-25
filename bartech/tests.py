@@ -22,8 +22,10 @@ from catalog.models import (
     PreparationStep,
     PublicationStatus,
     RecipeLineRole,
+    Tag,
 )
 from catalog.management.commands.sync_cloudinary_assets import normalize
+from catalog.management.commands.populate_initial_cocktails import RECIPES
 
 
 class CatalogDomainTests(TestCase):
@@ -294,3 +296,55 @@ class CloudinaryVersionedStorageTests(TestCase):
         storage.url('mint-master')
         storage.url('mint-master')
         resource.assert_called_once()
+
+
+class InitialCocktailPopulationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        category = IngredientCategory.objects.create(name='Test Ingredients', slug='test-ingredients')
+        for slug, name in {
+            'vodka': 'Vodka', 'peach-liqueur': 'Peach Liqueur', 'cranberry-juice': 'Cranberry Juice',
+            'ice-cubes': 'Ice Cubes', 'lime': 'Lime', 'white-rum': 'White Rum', 'lime-juice': 'Lime Juice',
+            'mint': 'Mint', 'granulated-sugar': 'Granulated Sugar', 'club-soda': 'Club Soda',
+            'dark-rum': 'Dark Rum', 'raspberry-liqueur': 'Raspberry Liqueur', 'strawberry': 'Strawberry',
+            'ginger-beer': 'Ginger Beer', 'gold-rum': 'Gold Rum', 'demerara-rum': 'Demerara Rum',
+            'falernum': 'Falernum', 'grapefruit-juice': 'Grapefruit Juice', 'cinnamon-syrup': 'Cinnamon Syrup',
+            'grenadine': 'Grenadine', 'angostura-bitters': 'Angostura Bitters', 'pernod': 'Pernod',
+            'crushed-ice': 'Crushed Ice', 'coffee-liqueur': 'Coffee Liqueur', 'amaretto-liqueur': 'Amaretto Liqueur',
+            'irish-cream-liqueur': 'Irish Cream Liqueur', 'whipped-cream': 'Whipped Cream', 'orange': 'Orange',
+        }.items():
+            Ingredient.objects.create(name=name, slug=slug, category=category)
+        for slug, name in {'woo-woo': 'Woo Woo', 'classic-mojito': 'Classic Mojito', 'dark-and-stormy': 'Dark and Stormy', 'courtesan': 'Courtesan', 'zombie': 'Zombie', 'witchs-brew': "Witch's Brew", 'arabica': 'Arabica', 'blow-job': 'Blow Job', 'vampires-kiss-martini': "Vampire's Kiss Martini"}.items():
+            Cocktail.objects.create(name=name, slug=slug, status=PublicationStatus.DRAFT)
+
+    def test_apply_populates_and_publishes_all_targets(self):
+        call_command('populate_initial_cocktails', apply=True)
+        self.assertEqual(Cocktail.objects.filter(status=PublicationStatus.PUBLISHED).count(), 9)
+        for slug, recipe in RECIPES.items():
+            cocktail = Cocktail.objects.get(slug=slug)
+            self.assertEqual(cocktail.recipe_ingredients.count(), len(recipe['lines']))
+            self.assertEqual(cocktail.preparation_steps.count(), len(recipe['steps']))
+            self.assertEqual(cocktail.equipment_items.count(), len(recipe['equipment']))
+            self.assertIsNotNone(cocktail.primary_glassware)
+
+    def test_apply_is_idempotent_for_recipe_children_and_references(self):
+        call_command('populate_initial_cocktails', apply=True)
+        counts = {
+            'ingredients': Ingredient.objects.count(),
+            'cocktails': Cocktail.objects.count(),
+            'units': MeasurementUnit.objects.count(),
+            'glassware': Glassware.objects.count(),
+            'equipment': Equipment.objects.count(),
+            'tags': Tag.objects.count(),
+            'lines': CocktailIngredient.objects.count(),
+            'steps': PreparationStep.objects.count(),
+            'links': CocktailEquipment.objects.count(),
+        }
+        call_command('populate_initial_cocktails', apply=True)
+        self.assertEqual(counts, {
+            'ingredients': Ingredient.objects.count(), 'cocktails': Cocktail.objects.count(),
+            'units': MeasurementUnit.objects.count(), 'glassware': Glassware.objects.count(),
+            'equipment': Equipment.objects.count(), 'tags': Tag.objects.count(),
+            'lines': CocktailIngredient.objects.count(), 'steps': PreparationStep.objects.count(),
+            'links': CocktailEquipment.objects.count(),
+        })
